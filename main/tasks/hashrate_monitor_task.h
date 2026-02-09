@@ -9,6 +9,14 @@
 
 #define HR_INTERVAL 5000
 
+// Hashrate domain counter registers (BM1366/BM1368/BM1370)
+static constexpr uint8_t REG_NONCE_DOMAIN0_CNT = 0x88;
+static constexpr uint8_t REG_NONCE_DOMAIN1_CNT = 0x89;
+static constexpr uint8_t REG_NONCE_DOMAIN2_CNT = 0x8A;
+static constexpr uint8_t REG_NONCE_DOMAIN3_CNT = 0x8B;
+static constexpr uint8_t REG_NONCE_TOTAL_CNT_DOMAIN = 0x8C; // BM1366/68/70 total counter
+static constexpr uint8_t REG_NONCE_TOTAL_CNT_DEFAULT = 0x90; // BM1397 total counter
+
 class Board;
 class Asic;
 
@@ -63,7 +71,10 @@ class HashrateMonitor {
     uint32_t m_period_ms = 1000;
 
     int m_asicCount = 0;
+    int m_domainCount = 0;
+    uint8_t m_totalCounterReg = REG_NONCE_TOTAL_CNT_DEFAULT;
     float *m_chipHashrate = nullptr;
+    float *m_domainHashrate = nullptr;
     float m_smoothedHashrate = 0.0f;
     float m_hashrate = 0.0f;
 
@@ -71,6 +82,9 @@ class HashrateMonitor {
 
     int64_t *m_prevResponse = nullptr;
     uint32_t *m_prevCounter = nullptr;
+
+    int64_t *m_prevDomainResponse = nullptr;
+    uint32_t *m_prevDomainCounter = nullptr;
 
     // Task plumbing
     static void taskWrapper(void *pv);
@@ -87,6 +101,9 @@ class HashrateMonitor {
     float getChipHashrate(int nr);
     float getTotalChipHashrate();
 
+    void setDomainHashrate(int asicIdx, int domainIdx, float ghs);
+    float getDomainHashrateInternal(int asicIdx, int domainIdx);
+
   public:
     HashrateMonitor();
 
@@ -96,7 +113,10 @@ class HashrateMonitor {
 
     // Called from RX dispatcher for each register reply.
     // 'counterNow' is the 32-bit counter (host-endian).
-    void onRegisterReply(uint8_t asic_idx, uint32_t counterNow);
+    void onRegisterReply(uint8_t reg, uint8_t asic_idx, uint32_t counterNow);
+
+    int getDomainCount() const { return m_domainCount; }
+    float getDomainHashrate(int asicIdx, int domainIdx);
 
     float getSmoothedTotalChipHashrate() {
       return m_smoothedHashrate;

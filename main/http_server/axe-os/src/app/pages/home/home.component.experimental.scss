@@ -983,7 +983,8 @@ nb-card-header{
 }
 
 /* Chart collapse/expand toggle (top-right in chart header) */
-.nerd-chart-header .chart-toggle{
+.nerd-chart-header .chart-toggle,
+.hashrate-registers__header .chart-toggle{
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -1036,7 +1037,8 @@ nb-card-header{
   }
 }
 
-.nerd-chart-header .chart-toggle__label{
+.nerd-chart-header .chart-toggle__label,
+.hashrate-registers__header .chart-toggle__label{
   font-size: 0.85rem;
   opacity: 1;
 
@@ -1045,7 +1047,8 @@ nb-card-header{
 }
 
 /* SVG chevron: same color as label (bar fill token). */
-.nerd-chart-header .chart-toggle__icon{
+.nerd-chart-header .chart-toggle__icon,
+.hashrate-registers__header .chart-toggle__icon{
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1053,13 +1056,15 @@ nb-card-header{
   color: var(--chart-toggle-color, var(--text-basic-color)) !important;
 }
 
-.nerd-chart-header .chart-toggle__icon svg{
+.nerd-chart-header .chart-toggle__icon svg,
+.hashrate-registers__header .chart-toggle__icon svg{
   width: 14px;
   height: 14px;
   display: block;
 }
 
-.nerd-chart-header .chart-toggle__icon svg path{
+.nerd-chart-header .chart-toggle__icon svg path,
+.hashrate-registers__header .chart-toggle__icon svg path{
   fill: none;
   /* Force stroke directly (some UI kits override `color`). */
   stroke: var(--chart-toggle-color, var(--text-basic-color)) !important;
@@ -1068,7 +1073,8 @@ nb-card-header{
   stroke-linejoin: round;
 }
 
-.nerd-chart-header .chart-toggle__icon--up svg{
+.nerd-chart-header .chart-toggle__icon--up svg,
+.hashrate-registers__header .chart-toggle__icon--up svg{
   transform: rotate(180deg);
 }
 
@@ -1456,6 +1462,152 @@ nb-card-header{
 /* In the boxed heat container, let the box provide the surface. */
 .heat-usage-box .power-bar{
   background: transparent;
+}
+
+/* Hashrate Registers (per ASIC / domain) */
+.hashrate-registers{
+  margin-top: 12px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  --pbar-h: 44px;
+  --pbar-gap: 12px;
+  --bar-label-fs: 1rem;
+}
+
+.hashrate-registers--collapsed{
+  padding-bottom: 8px;
+}
+
+.hashrate-registers--collapsed .hashrate-registers__header{
+  margin-bottom: 0;
+}
+
+:host-context(.nb-theme-default) .hashrate-registers,
+:host-context(.nb-theme-corporate) .hashrate-registers,
+:host-context(.nb-theme-light) .hashrate-registers{
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  --chart-toggle-color: var(--card-text-color, var(--text-hint-color, var(--text-basic-color)));
+  --chart-toggle-hover-bg: rgba(0, 0, 0, 0.045);
+}
+
+:host-context(.nb-theme-dark) .hashrate-registers,
+:host-context(.nb-theme-cosmic) .hashrate-registers{
+  --chart-toggle-color: #ffffff;
+  --chart-toggle-hover-bg: rgba(255, 255, 255, 0.09);
+}
+
+.hashrate-registers__header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 16px;
+}
+
+.hashrate-registers__title{
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-hint-color, var(--text-basic-color));
+}
+
+.hashrate-registers__body{
+  overflow: hidden;
+  max-height: 2000px;
+  opacity: 1;
+  transition: max-height 260ms ease, opacity 180ms ease;
+}
+
+.hashrate-registers__body--collapsed{
+  display: none;
+  max-height: 0;
+  opacity: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.hashrate-registers__grid{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  --chip-gap: 0px;
+  --hash-domain-size: calc(((var(--pbar-h) * 3) + (var(--pbar-gap) * 2) - var(--chip-gap)) / 2);
+  gap: var(--chip-gap);
+}
+
+.hashrate-registers__asic-column{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.hashrate-registers__asic{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hash-domain-size);
+  height: var(--hash-domain-size);
+  font-size: 2.1rem;
+  font-weight: 900;
+  color: var(--unit-color);
+  opacity: 0.5;
+  line-height: 1;
+}
+
+.hashrate-registers__asic-total{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 12px;
+  width: var(--hash-domain-size);
+  text-align: center;
+  line-height: 1;
+}
+
+.hashrate-registers__asic-total-value{
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--bar-fill, #a564f6);
+}
+
+.hashrate-registers__asic-total-na{
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--bar-fill, #a564f6);
+  opacity: 0.65;
+}
+
+.hashrate-registers__cell{
+  background: var(--bar-fill);
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  width: var(--hash-domain-size);
+  height: var(--hash-domain-size);
+}
+
+.hashrate-registers__unit{
+  color: #fff !important;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.hashrate-registers__value{
+  font-size: var(--bar-label-fs);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.hashrate-registers__na{
+  color: #fff;
+  font-weight: 600;
+  opacity: 0.9;
 }
 
 /* Plain sections (no nb-card “tile” box) */

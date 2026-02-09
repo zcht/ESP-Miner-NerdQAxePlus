@@ -33,6 +33,38 @@ static inline uint64_t make_key(uint32_t nonce, uint32_t version)
     return (uint64_t(nonce) << 32) | uint64_t(version);
 }
 
+static int resolveRegisterAsicIndex(Board *board, const task_result &result)
+{
+    if (!board) return result.asic_nr;
+
+    const int asicCount = board->getAsicCount();
+    if (asicCount <= 0) return result.asic_nr;
+
+    const uint8_t addr = result.asic_addr;
+
+    // Some builds report direct ASIC indices in register replies.
+    if (addr < asicCount) {
+        return static_cast<int>(addr);
+    }
+
+    const int interval = 256 / asicCount;
+    if (interval > 0) {
+        const int candidate = addr / interval;
+        if (candidate >= 0 && candidate < asicCount) {
+            return candidate;
+        }
+    }
+
+    int idx = result.asic_nr;
+    if (idx >= 0 && idx < asicCount) {
+        return idx;
+    }
+
+    if (idx < 0) idx = 0;
+    if (idx >= asicCount) idx = asicCount - 1;
+    return idx;
+}
+
 void ASIC_result_task(void *pvParameters)
 {
     Board* board = SYSTEM_MODULE.getBoard();
@@ -52,12 +84,13 @@ void ASIC_result_task(void *pvParameters)
         }
 
         if (asic_result.is_reg_resp) {
+            const int asic_idx = resolveRegisterAsicIndex(board, asic_result);
             switch (asic_result.reg) {
                 case 0xb4: {
                     if (asic_result.data & 0x80000000) {
                         float ftemp = (float) (asic_result.data & 0x0000ffff) * 0.171342f - 299.5144f;
-                        ESP_LOGI(TAG, "asic %d temp: %.3f", (int) asic_result.asic_nr, ftemp);
-                        board->setChipTemp(asic_result.asic_nr, ftemp);
+                        ESP_LOGI(TAG, "asic %d temp: %.3f", asic_idx, ftemp);
+                        board->setChipTemp(asic_idx, ftemp);
                     }
                     break;
                 }
@@ -65,8 +98,13 @@ void ASIC_result_task(void *pvParameters)
                     // maybe the upper 32bit of a 64bit counter and 0x90 returns the lower 32bit
                     break;
                 }
+                case 0x88:
+                case 0x89:
+                case 0x8A:
+                case 0x8B:
+                case 0x8C:
                 case 0x90: {
-                    HASHRATE_MONITOR.onRegisterReply(asic_result.asic_nr, asic_result.data);
+                    HASHRATE_MONITOR.onRegisterReply(asic_result.reg, asic_idx, asic_result.data);
                     break;
                 }
                 default: {

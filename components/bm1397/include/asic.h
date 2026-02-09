@@ -59,6 +59,7 @@ typedef struct
     uint32_t nonce;
     uint32_t rolled_version;
     int asic_nr;
+    uint8_t asic_addr;
     uint32_t data;
     uint8_t reg;
     uint8_t is_reg_resp;
@@ -79,6 +80,7 @@ protected:
     float m_current_frequency;
     float m_actual_current_frequency;
     uint32_t m_asicDifficulty;
+    uint8_t m_addrInterval = 1;
 
     void send(uint8_t header, uint8_t *data, uint8_t data_len);
     void send2(uint8_t header, uint8_t b0, uint8_t b1);
@@ -87,6 +89,7 @@ protected:
     bool sendHashFrequency(float target_freq);
     void setVrFreqReg(uint32_t value);
     bool doFrequencyTransition(float target_frequency);
+    void setAddressIntervalFromChipCount(int chipCount);
     void setChipAddress(uint8_t chipAddr);
     void sendReadAddress(void);
     void sendChainInactive(void);
@@ -103,12 +106,15 @@ protected:
     // helper functions
     uint32_t vrFreqToReg(uint32_t freq_hz);
     uint32_t vrRegToFreq(uint32_t reg);
+    uint8_t nonceAddressToAsicNr(uint32_t nonce) const;
 
     virtual uint8_t nonceToAsicNr(uint32_t nonce) = 0;
 
 public:
     Asic();
     virtual const char* getName() = 0;
+    // Number of hashrate domains supported by this ASIC (0 = not supported).
+    virtual uint8_t getHashDomainCount() { return 0; }
     uint8_t sendWork(uint32_t job_id, bm_job *next_bm_job);
     bool processWork(task_result *result);
     void setJobDifficultyMask(int difficulty);
@@ -124,5 +130,3 @@ public:
     virtual uint8_t init(uint64_t frequency, uint16_t asic_count, uint32_t difficulty, uint32_t vrFrequency) = 0;
     virtual int setMaxBaud(void);
 };
-
-

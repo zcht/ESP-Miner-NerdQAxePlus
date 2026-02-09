@@ -32,12 +32,10 @@ import {
   computeXWindow,
   computeHomeChartScales,
   applyAxisBoundsToChartOptions,
-  shouldUnlockStartup,
   HomeWarmupMachine,
   shouldInsertRestartCut,
   syncHomeChartDataAndSmoothing,
   getHistoryOldestTimestampMs,
-  shouldStartHr1mFromHistory,
   shouldShowZoomWindowLabel,
   clampWindowMs,
   stepWindowMs,
@@ -85,7 +83,11 @@ import { maxAsicTemp,
   formatUptime,
   normalizeHomeTileInfo,
   HomeBarDomSync,
-  hexToRgba
+  HashrateDomainColumn,
+  hexToRgba,
+  getHashrateDomainsGlobalMax,
+  getHashrateDomainBg,
+  toHashrateDomainColumns
 } from './tiles/utils';
 @Component({
   selector: 'app-home-experimental',
@@ -105,6 +107,8 @@ export class HomeExperimentalComponent implements AfterViewChecked, OnInit, OnDe
     maxWindowMs: HOME_CFG.xAxis.maxWindowMs,
     zoomStepMs: HOME_CFG.xAxis.zoomStepMs,
   };
+  public isHashrateRegistersCollapsed: boolean = false;
+  private readonly hashrateRegistersCollapsedKey: string = 'hashrateRegistersCollapsed_exp';
 
   // CSS vars for meter bars (kept in sync with HOME_CFG)
   @HostBinding('style.--bar-fill') barFill: string = HOME_CFG.colors.hashrateBase;
@@ -144,10 +148,12 @@ export class HomeExperimentalComponent implements AfterViewChecked, OnInit, OnDe
     if (next === this.chartWindowMs) return;
     const prev = this.chartWindowMs;
     this.chartWindowMs = next;
+
     // Reset sticky temp bounds so the axis re-fits to the new window.
     this.lastTempAxisMin = null;
     this.lastTempAxisMax = null;
 
+    // If we zoom out and lack older points, trigger a backfill.
     if (next > prev) {
       const oldest = this.dataLabel?.length ? this.dataLabel[0] : null;
       const cutoff = Date.now() - next;
@@ -159,7 +165,7 @@ export class HomeExperimentalComponent implements AfterViewChecked, OnInit, OnDe
 
     this.updateAxesScaleAdaptive();
     this.syncChartDatasetsAndSmoothing();
-    // Force immediate dataset refresh so smoothing changes apply before any next tick.
+    // Apply smoothing immediately for this zoom level (without waiting for next poll tick).
     try { this.chart?.update?.('none'); } catch {}
     updateChartWithZoomAnimation(this.chart, 160);
   }
@@ -201,6 +207,12 @@ export class HomeExperimentalComponent implements AfterViewChecked, OnInit, OnDe
   public isBarMax = isBarMax;
   public isBarOver = isBarOver;
   public BAR_LIMITS = BAR_LIMITS;
+  public getHashrateDomainsGlobalMax = getHashrateDomainsGlobalMax;
+  public toHashrateDomainColumns = toHashrateDomainColumns;
+  public getHashrateDomainBg = getHashrateDomainBg;
+  public hashrateRegistersCfg = HOME_CFG.tiles.hashrateRegisters;
+  public hashrateDomainColumns: HashrateDomainColumn[] = [];
+  public hashrateDomainsGlobalMax = 0;
 
   /**
    * Input Voltage warn-band (yellow) should be data-driven (HOME_CFG) and centralized.
@@ -317,8 +329,7 @@ export class HomeExperimentalComponent implements AfterViewChecked, OnInit, OnDe
   // Chunk size for the history drainer (0 means no limit)
   private chunkSizeDrainer: number = HOME_CFG.historyDrain.chunkSize;
   // --- Rendering smoothing (visual only)
-  // Applies to the 1min hashrate dataset. This does not modify data, only the curve rendering.
-  // Rule: high point density => higher tension, low density => lower tension.
+  // Applies to the 1min hashrate dataset (rendering only, data remains untouched in state).
   private hashrate1mSmoothingCfg = { ...HOME_CFG.smoothing.hashrate1m };
 
   private setHashrateYAxisLabelCount(count: number): void {
@@ -424,7 +435,6 @@ export class HomeExperimentalComponent implements AfterViewChecked, OnInit, OnDe
   private hr1mReloadTimer: any = null;
   private readonly hr1mReloadConsumedKey: string = '__nerdCharts_hr1mReloadConsumedToken';
   private readonly hr1mReloadCooldownUntilKey: string = '__nerdCharts_hr1mReloadCooldownUntil';
-  private isHistoryImporting: boolean = false;
   // NOTE: For hashrate charts, the pill/live value is used ONLY as a warmup gate signal.
   // The plotted data continues to come from the history series (as before).
   // To avoid a visible "shoot" or a brief drop right after restart, we simply do NOT start
@@ -504,13 +514,13 @@ export class HomeExperimentalComponent implements AfterViewChecked, OnInit, OnDe
 
     // Restore chart collapsed state (visual-only)
     this.isChartCollapsed = this.localStorageGet(this.chartCollapsedKey) === '1';
+    this.isHashrateRegistersCollapsed = this.localStorageGet(this.hashrateRegistersCollapsedKey) === '1';
 
     this.barDomSync = new HomeBarDomSync(this.hostEl, this.renderer, HOME_CFG.tiles.domSync);
 
     this.historyDrainer = new HomeHistoryDrainer(
       {
-        fetchInfo: (startTimestampMs, chunkSize) =>
-          this.systemService.getInfoWithSpan(startTimestampMs, chunkSize, HOME_CFG.xAxis.maxWindowMs),
+        fetchInfo: (startTimestampMs, chunkSize) => this.systemService.getInfo(startTimestampMs, chunkSize),
         importHistoryChunk: (history) => this.importHistoricalData(history),
         setRunning: (running) => (this.historyDrainRunning = running),
         setSuppressed: (suppressed) => (this.suppressChartUpdatesDuringHistoryDrain = suppressed),
@@ -658,6 +668,8 @@ export class HomeExperimentalComponent implements AfterViewChecked, OnInit, OnDe
 
         this.isDualPool = derived.isDualPool;
         this.hasChipTemps = derived.hasChipTemps;
+        this.hashrateDomainColumns = toHashrateDomainColumns((info as any)?.hashrateDomains, (info as any)?.hashrateDomainsCount);
+        this.hashrateDomainsGlobalMax = getHashrateDomainsGlobalMax((info as any)?.hashrateDomains);
 
         return info;
       },
@@ -695,6 +707,17 @@ export class HomeExperimentalComponent implements AfterViewChecked, OnInit, OnDe
       try { (this.chart as any)?.resize?.(); } catch {}
       try { this.chart?.update?.('none' as any); } catch {}
     }, 280);
+  }
+
+  public toggleHashrateRegistersCollapsed(evt?: Event): void {
+    this.isHashrateRegistersCollapsed = !this.isHashrateRegistersCollapsed;
+    try { (evt?.currentTarget as HTMLElement | null)?.blur?.(); } catch {}
+
+    if (this.isHashrateRegistersCollapsed) {
+      this.localStorageSet(this.hashrateRegistersCollapsedKey, '1');
+      return;
+    }
+    this.localStorageRemove(this.hashrateRegistersCollapsedKey);
   }
 
   /**
@@ -903,6 +926,16 @@ ngOnInit() {
     };
     window.addEventListener('timeFormatChanged', this.timeFormatListener);
 
+    // If a wipe was requested before the experimental dashboard was loaded, do it now once.
+    try {
+      if (localStorage.getItem('__pendingChartHistoryWipe') === '1') {
+        localStorage.removeItem('__pendingChartHistoryWipe');
+        (this as any).clearChartHistoryInternal();
+      }
+    } catch {
+      // ignore
+    }
+
     // Pull `/asic` once so the Current Frequency bar can use the same
     // model-specific frequency table as the Settings screen.
     (async () => {
@@ -956,12 +989,7 @@ ngOnInit() {
 
   private importHistoricalData(data: any) {
     // relative to absolute time stamps
-    this.isHistoryImporting = true;
-    try {
-      this.updateChartData(data);
-    } finally {
-      this.isHistoryImporting = false;
-    }
+    this.updateChartData(data);
 
     if (data.timestamps && data.timestamps.length) {
       const lastRel = data.timestamps[data.timestamps.length - 1];
@@ -1067,7 +1095,7 @@ private setAxisPadding(cfg: any, persist: boolean = false): void {
 
     if (!this.chart || !this.chartOptions?.scales) return;
 
-    // Always enforce a stable X-window (e.g. 1h), regardless of how many points exist.
+    // Always enforce a stable X-window according to the selected zoom range.
     const { xMinMs, xMaxMs } = computeXWindow(this.dataLabel || [], this.chartWindowMs);
     this.applyXWindowToChart(xMinMs, xMaxMs);
 
@@ -1120,7 +1148,6 @@ private setAxisPadding(cfg: any, persist: boolean = false): void {
     if (Number.isFinite(tempAxisMax as any)) this.lastTempAxisMax = tempAxisMax as number;
 
     applyAxisBoundsToChartOptions(this.chartOptions, bounds);
-
   }
 
   // --- Sanitizing helpers (invalid samples become NaN => visual gap / never plotted)
@@ -1244,15 +1271,11 @@ private setAxisPadding(cfg: any, persist: boolean = false): void {
 
     const live = Number(livePoolSumHs);
     const expected = Number(this.expectedHashrateHsLast);
-    const ratio = Number(HOME_CFG.startup.expectedUnlockRatio ?? 0.75);
-    const liveStable = !!this.graphGuardEngine?.isLiveRefStable?.();
+    if (!Number.isFinite(live) || live <= 0) return;
+    if (!Number.isFinite(expected) || expected <= 0) return;
 
-    if (shouldUnlockStartup({
-      liveHs: live,
-      expectedHs: expected,
-      expectedUnlockRatio: ratio,
-      liveIsStable: liveStable,
-    })) {
+    const ratio = Number(HOME_CFG.startup.expectedUnlockRatio ?? 0.75);
+    if (live >= expected * ratio) {
       this.startupUnlocked = true;
       const n = Math.max(0, Math.round(Number(HOME_CFG.startup.bypassGuardSamples ?? 0)));
       this.bypassRemaining = {
@@ -1385,13 +1408,7 @@ private setAxisPadding(cfg: any, persist: boolean = false): void {
           : histOk;
 
         if (!this.hr1mStarted) {
-          if (shouldStartHr1mFromHistory({
-            hr1mStarted: this.hr1mStarted,
-            startupUnlocked: this.startupUnlocked,
-            histOk,
-            histUnlockOk,
-            isHistoryImporting: this.isHistoryImporting,
-          })) {
+          if (this.startupUnlocked && histUnlockOk) {
             this.hr1mStarted = true;
             // Smooth startup + optional reload should only trigger after an actual restart (hard cut).
             // On normal page loads, we keep snappy behavior (no smooth window).
@@ -1545,8 +1562,6 @@ private setAxisPadding(cfg: any, persist: boolean = false): void {
       if (this.chartData) {
         this.updateChart();
       }
-
-      this.maybeExpandHistoryForZoom();
     } catch (err) {
       console.warn('[HomeComponent] Failed to load chartData from storage (keeping it untouched).', err);
 
@@ -1556,17 +1571,6 @@ private setAxisPadding(cfg: any, persist: boolean = false): void {
       if (this.chartData) {
         this.updateChart();
       }
-    }
-  }
-
-  private maybeExpandHistoryForZoom(): void {
-    const maxWindow = this.zoomCfg?.maxWindowMs ?? 0;
-    if (!maxWindow || !this.dataLabel?.length) return;
-
-    const oldest = this.dataLabel[0];
-    const cutoff = Date.now() - maxWindow;
-    if (!Number.isFinite(oldest as any) || Number(oldest) > cutoff + 2000) {
-      void this.reloadHistoryForWindow(maxWindow);
     }
   }
 
@@ -1642,7 +1646,7 @@ private setAxisPadding(cfg: any, persist: boolean = false): void {
 
   private filterOldData(): void {
     const now = new Date().getTime();
-    // Keep the in-memory series consistent with the current x-axis viewport.
+    // Keep enough history in memory for the largest zoom window.
     this.chartState.trimToWindow(now, this.zoomCfg.maxWindowMs);
 
     if (this.chartState.labels.length) {
@@ -1787,7 +1791,7 @@ private setAxisPadding(cfg: any, persist: boolean = false): void {
         this.systemService.getInfoWithSpan(start, this.chunkSizeDrainer, windowMs)
       );
     } catch {
-      // ignore (next polling tick will retry)
+      // Ignore; the next polling tick will retry.
       return;
     }
 
@@ -1802,14 +1806,13 @@ private setAxisPadding(cfg: any, persist: boolean = false): void {
         && Number.isFinite(fetchedOldest as any)
         && (fetchedOldest as number) < (existingOldest as number) - 2000);
 
-    // If the fetched history does NOT extend further back than what we already have,
-    // avoid wiping local history (e.g. after a miner reboot when firmware history reset).
+    // If fetched history does not extend older than local state, do not wipe local cache.
     if (!shouldReplace) {
       this.importHistoricalData(info.history);
       return;
     }
 
-    // Reset state so older points can be re-imported in one pass.
+    // Replace local history with the broader window.
     this.historyDrainer?.stop();
     this.historyDrainRunning = false;
     this.suppressChartUpdatesDuringHistoryDrain = false;

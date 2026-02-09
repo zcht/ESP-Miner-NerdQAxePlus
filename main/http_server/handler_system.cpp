@@ -2,6 +2,7 @@
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include <math.h>
 
 #include "ArduinoJson.h"
 
@@ -14,6 +15,13 @@
 #include "ping_task.h"
 
 static const char *TAG = "http_system";
+
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
 
 #define VR_FREQUENCY_ENABLED
 
@@ -116,7 +124,6 @@ esp_err_t GET_system_info(httpd_req_t *req)
     doc["maxCurrentA"]        = board->getMaxCurrentA(); // A
     doc["temp"]               = POWER_MANAGEMENT_MODULE.getChipTempMax();
     doc["vrTemp"]             = POWER_MANAGEMENT_MODULE.getVRTemp();
-    doc["vrTempInt"]          = POWER_MANAGEMENT_MODULE.getVRTempInt();
     doc["hashRateTimestamp"]  = history->getCurrentTimestamp();
     // set hashrate values to 0 in shutdown
     doc["hashRate"]           = !shutdown ? SYSTEM_MODULE.getCurrentHashrate() : 0.0;
@@ -130,8 +137,6 @@ esp_err_t GET_system_info(httpd_req_t *req)
     doc["fanspeed"]           = POWER_MANAGEMENT_MODULE.getFanPerc();
     doc["manualFanSpeed"]     = Config::getFanSpeed();
     doc["fanrpm"]             = POWER_MANAGEMENT_MODULE.getFanRPM(0);
-    doc["fanrpm2"]            = (board->getNumFans() > 1) ? POWER_MANAGEMENT_MODULE.getFanRPM(1) : 0;
-    doc["fanCount"]           = board->getNumFans();
     doc["lastpingrtt"]        = get_last_ping_rtt();
     doc["recentpingloss"]     = get_recent_ping_loss();
     doc["shutdown"]           = POWER_MANAGEMENT_MODULE.isShutdown();
@@ -155,6 +160,35 @@ esp_err_t GET_system_info(httpd_req_t *req)
         JsonArray arr = doc["asicTemps"].to<JsonArray>();
         for (int i=0;i<board->getAsicCount();i++) {
             arr.add(board->getChipTemp(i));
+        }
+    }
+
+    // Hashrate registers (per ASIC, per domain)
+    {
+        const int asicCount = board->getAsicCount();
+        const int domainCount = HASHRATE_MONITOR.getDomainCount();
+        const int uiDomainCount = asicCount > 0 ? (domainCount > 0 ? domainCount : 1) : 0;
+        const bool hasDomainSupport = (domainCount > 0);
+
+        doc["hashrateDomainsCount"] = uiDomainCount;
+        JsonArray asicArr = doc["hashrateDomains"].to<JsonArray>();
+
+        if (asicCount > 0) {
+            for (int asic = 0; asic < asicCount; ++asic) {
+                JsonArray domains = asicArr.add<JsonArray>();
+                for (int d = 0; d < uiDomainCount; ++d) {
+                    if (!hasDomainSupport) {
+                        domains.add(nullptr);
+                        continue;
+                    }
+                    float ghs = HASHRATE_MONITOR.getDomainHashrate(asic, d);
+                    if (isfinite(ghs) && ghs >= 1.0f && ghs < 1e9f) {
+                        domains.add((uint32_t) llroundf(ghs));
+                    } else {
+                        domains.add(nullptr);
+                    }
+                }
+            }
         }
     }
 

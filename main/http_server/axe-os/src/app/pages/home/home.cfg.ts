@@ -304,6 +304,20 @@ export interface HomeTilesCfg {
   powerUsageAliases: PowerUsageAliasCfg;
   domSync: BarDomSyncCfg;
 
+  /** Visual mapping for hashrate register domain cell backgrounds. */
+  hashrateRegisters: {
+    /** Bucket width in relative units (0.05 = 5% below global max per bucket). */
+    alphaStepPct: number;
+    /** Alpha decrement per bucket. */
+    alphaStep: number;
+    /** Min alpha for slow/low domains. */
+    alphaMin: number;
+    /** Max alpha for fastest domains. */
+    alphaMax: number;
+    /** Alpha for N/A or non-finite values. */
+    naAlpha: number;
+  };
+
   /** Visual-only thresholds for the Input Current (A) bar. */
   inputCurrent: {
     lowMaxAThreshold?: number;
@@ -538,6 +552,19 @@ export const HOME_CFG: HomeCfg = {
       darkThemeHints: ['dark', 'cosmic'],
     },
 
+    hashrateRegisters: {
+      // Finer dynamic buckets (2.5%) vs global max across the full ASIC x domain matrix.
+      alphaStepPct: 0.025,
+      // Each bucket below top reduces visibility by 6%.
+      alphaStep: 0.06,
+      // Allow lower buckets to be visibly dimmer for clearer contrast.
+      alphaMin: 0.40,
+      // Fastest domains should use full hashrate color.
+      alphaMax: 1.00,
+      // N/A / invalid values use a clearly reduced baseline alpha.
+      naAlpha: 0.45,
+    },
+
     /**
      * Input current (A) bar rendering thresholds (visual-only).
      *
@@ -661,9 +688,9 @@ export const HOME_CFG: HomeCfg = {
       enabled: true,
       fastIntervalMs: 6000,
       mediumIntervalMs: 12000,
-      tensionFast: 0.45,
-      tensionMedium: 0.18,
-      tensionSlow: 0.12,
+      tensionFast: 0.60,
+      tensionMedium: 0.25,
+      tensionSlow: 0.20,
       cubicInterpolationMode: 'monotone',
       // Previously effectively 60 in applyHashrate1mSmoothing
       medianWindowPoints: 60,

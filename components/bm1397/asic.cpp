@@ -36,6 +36,7 @@ const static char* TAG = "asic";
 Asic::Asic() {
     m_current_frequency = 56.25;
     m_asicDifficulty = 0xffffffff;
+    m_addrInterval = 1;
 }
 
 uint16_t Asic::reverseUint16(uint16_t num)
@@ -195,17 +196,44 @@ uint32_t Asic::vrRegToFreq(uint32_t reg) {
     return static_cast<uint32_t>((VR_REG_PER_HZ_U64 + (reg / 2)) / reg);
 }
 
+void Asic::setAddressIntervalFromChipCount(int chipCount)
+{
+    if (chipCount <= 0) {
+        m_addrInterval = 1;
+        ESP_LOGW(TAG, "invalid chip count (%d), fallback address interval=%d", chipCount, (int) m_addrInterval);
+        return;
+    }
+
+    int interval = 256 / chipCount;
+    if (interval <= 0) {
+        interval = 1;
+    }
+
+    m_addrInterval = static_cast<uint8_t>(interval);
+    ESP_LOGI(TAG, "address interval set to %d for %d chip(s)", (int) m_addrInterval, chipCount);
+}
+
 void Asic::setVrFrequency(uint32_t freq_hz) {
     setVrFreqReg(vrFreqToReg(freq_hz));
 }
 
 // default calculation
 uint8_t Asic::chipIndexFromAddr(uint8_t addr) {
-    return addr >> 1;
+    const uint8_t interval = (m_addrInterval == 0) ? 1 : m_addrInterval;
+    return addr / interval;
 }
 
 uint8_t Asic::addrFromChipIndex(uint8_t idx) {
-    return idx << 1;
+    const uint8_t interval = (m_addrInterval == 0) ? 1 : m_addrInterval;
+    return idx * interval;
+}
+
+uint8_t Asic::nonceAddressToAsicNr(uint32_t nonce) const
+{
+    const uint8_t interval = (m_addrInterval == 0) ? 1 : m_addrInterval;
+    const uint32_t nonce_h = __builtin_bswap32(nonce);
+    const uint8_t asicAddr = static_cast<uint8_t>((nonce_h >> 17) & 0xff);
+    return asicAddr / interval;
 }
 
 void Asic::requestChipTemp() {
@@ -382,6 +410,7 @@ bool Asic::processWork(task_result *result)
         result->data = __bswap32(asic_result.nonce);
         result->reg = asic_result.job_id;
         result->is_reg_resp = 1;
+        result->asic_addr = asic_result.midstate_num;
         result->asic_nr = chipIndexFromAddr(asic_result.midstate_num);
         return true;
     }
@@ -394,6 +423,7 @@ bool Asic::processWork(task_result *result)
 
     result->job_id = job_id;
     result->asic_nr = asic_nr;
+    result->asic_addr = 0;
     result->nonce = asic_result.nonce;
     result->rolled_version = rolled_version;
     result->is_reg_resp = 0;

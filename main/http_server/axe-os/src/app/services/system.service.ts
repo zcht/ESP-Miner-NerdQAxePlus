@@ -24,7 +24,6 @@ const defaultInfo: ISystemInfo = {
   maxCurrentA: 6.0,
   temp: 60,
   vrTemp: 45,
-  vrTempInt: 45,
   hashRateTimestamp: 1724398272483,
   hashRate: 475,
   hashRate_10m: 475,
@@ -71,8 +70,6 @@ const defaultInfo: ISystemInfo = {
   fanspeed: 100,
   manualFanSpeed: 100,
   fanrpm: 0,
-  fanrpm2: 0,
-  fanCount: 1,
   autoscreenoff: 0,
   lastResetReason: "Unknown",
   jobInterval: 1200,
@@ -113,6 +110,8 @@ const defaultInfo: ISystemInfo = {
   boardtemp1: 30,
   boardtemp2: 40,
   overheat_temp: 70,
+  hashrateDomainsCount: 0,
+  hashrateDomains: [],
   history: {
     hashrate_1m: [],
     hashrate_10m: [],
@@ -184,6 +183,7 @@ export class SystemService {
         params = params.set('history_span', spanMs).set('experimental', '1');
       }
     }
+
     const endpoint = `${uri}/api/system/info`;
     return this.httpClient.get<ISystemInfo>(endpoint, { params });
   }

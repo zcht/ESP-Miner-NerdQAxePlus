@@ -19,7 +19,6 @@ export interface ISystemInfo {
     maxCurrentA?: number;
     temp: number,
     vrTemp: number,
-    vrTempInt: number,
     hashRateTimestamp: number,
     hashRate: number,
     hashRate_10m: number,
@@ -65,8 +64,6 @@ export interface ISystemInfo {
     fanspeed: number,
     manualFanSpeed: number,
     fanrpm: number,
-    fanrpm2?: number,
-    fanCount?: number,
     coreVoltageActual: number,
     lastResetReason: string,
     jobInterval: number,
@@ -91,6 +88,9 @@ export interface ISystemInfo {
     pidD: number,
 
     asicTemps?: number[],
+
+    hashrateDomainsCount?: number;
+    hashrateDomains?: Array<Array<number | null>>;
 
     history: IHistory
 

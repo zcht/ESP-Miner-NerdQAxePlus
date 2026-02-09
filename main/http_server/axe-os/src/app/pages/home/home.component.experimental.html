@@ -17,7 +17,6 @@
             <nb-card-header class="nerd-chart-header">
               <div class="chart-header-row">
                 <span class="text-hint">{{ 'HOME.HASH_RATE_CHART' | translate }}</span>
-
                 <div class="chart-header-actions">
                   <div class="chart-zoom-controls" *ngIf="!isChartCollapsed">
                     <span class="chart-zoom-label" *ngIf="showZoomWindowLabel" aria-live="polite">
@@ -582,14 +581,7 @@
 
                   </div>
 
-                  <div class="heat-bars">
-                    @let fanRpm1 = (info.fanrpm ?? 0);
-                    @let fanRpm2 = (info.fanrpm2 ?? 0);
-                    @let fanC1Present = fanRpm1 > 0;
-                    @let fanC2Present = fanRpm2 > 0;
-                    @let showFanC1 = fanC1Present || !fanC2Present;
-                    @let showFanC2 = fanC2Present;
-
+                <div class="heat-bars">
                     <!-- VR temp bar -->
                     <div class="power-bar" *ngIf="info.vrTemp > 0" role="img" data-bar="vr-temp"
                          [class.power-bar--warn]="isVrTempWarn(info.vrTemp)"
@@ -604,14 +596,11 @@
                     </div>
 
                     <!-- Fan bar (metric = fan speed %, shows RPM as secondary label) -->
-                    <div class="power-bar" *ngIf="showFanC1" role="img"
+                    <div class="power-bar" role="img"
                          [class.power-bar--max]="isBarMax(info.fanspeed, 100)"
-                         [attr.aria-label]="(showFanC2 ? ('HOME.FAN_CHANNEL' | translate:{channel: 1}) : ('HOME.FAN_SPEED' | translate)) + ': ' + (info.fanspeed | number: '1.0-0') + ' % (' + (info.fanrpm | number: '1.0-0') + ' RPM)'">
+                         [attr.aria-label]="('HOME.FAN_SPEED' | translate) + ': ' + (info.fanspeed | number: '1.0-0') + ' % (' + (info.fanrpm | number: '1.0-0') + ' RPM)'">
                       <div class="power-bar__fill" [style.width.%]="toPct(info.fanspeed, 0, 100)"></div>
-                      <div class="power-bar__label">
-                        <ng-container *ngIf="showFanC2; else fanLabelSingle">{{ 'HOME.FAN_CHANNEL' | translate:{channel: 1} }}</ng-container>
-                        <ng-template #fanLabelSingle>{{ 'HOME.FAN_SPEED' | translate }}</ng-template>
-                      </div>
+                      <div class="power-bar__label">{{ 'HOME.FAN_SPEED' | translate }}</div>
                       <div class="power-bar__value power-bar__value--inline">
                         <span class="fan-inline">
                           <span class="power-bar__subvalue">{{ info.fanrpm | number: '1.0-0' }}<span class="unit">&nbsp;RPM</span></span>
@@ -621,29 +610,73 @@
                       </div>
                     </div>
 
-                    <!-- Fan bar (channel 2, only if present) -->
-                    <div class="power-bar" *ngIf="showFanC2" role="img"
-                         [class.power-bar--max]="isBarMax(info.fanspeed, 100)"
-                         [attr.aria-label]="('HOME.FAN_CHANNEL' | translate:{channel: 2}) + ': ' + (info.fanspeed | number: '1.0-0') + ' % (' + (info.fanrpm2 ?? 0 | number: '1.0-0') + ' RPM)'">
-                      <div class="power-bar__fill" [style.width.%]="toPct(info.fanspeed, 0, 100)"></div>
-                      <div class="power-bar__label">{{ 'HOME.FAN_CHANNEL' | translate:{channel: 2} }}</div>
-                      <div class="power-bar__value power-bar__value--inline">
-                        <span class="fan-inline">
-                          <span class="power-bar__subvalue">{{ (info.fanrpm2 ?? 0) | number: '1.0-0' }}<span class="unit">&nbsp;RPM</span></span>
-                          <span class="power-bar__sep">/</span>
-                          <span class="power-bar__mainvalue">{{ info.fanspeed | number: '1.0-0' }}<span class="unit">&nbsp;%</span></span>
-                        </span>
-                      </div>
-                    </div>
-
-                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Nerd*OS logo (dual pool) -->
-          <div class="nerdos-logo-row nerdos-logo-row--dual" *ngIf="isDualPool">
+          <!-- Hashrate Registers (per ASIC / per domain) -->
+          <div class="hashrate-registers"
+               [class.hashrate-registers--collapsed]="isHashrateRegistersCollapsed"
+               *ngIf="(info.hashrateDomainsCount ?? 0) > 0">
+            <div class="hashrate-registers__header">
+              <span class="text-hint hashrate-registers__title">{{ 'HOME.HASHRATE_REGISTERS' | translate }}</span>
+              <button
+                nbButton
+                ghost
+                size="tiny"
+                class="chart-toggle"
+                type="button"
+                (click)="toggleHashrateRegistersCollapsed($event)"
+                [attr.aria-expanded]="!isHashrateRegistersCollapsed"
+              >
+                <span class="chart-toggle__label">
+                  {{ (isHashrateRegistersCollapsed ? 'HOME.SHOW_CHART' : 'HOME.HIDE_CHART') | translate }}
+                </span>
+                <span
+                  class="chart-toggle__icon"
+                  [class.chart-toggle__icon--up]="!isHashrateRegistersCollapsed"
+                  aria-hidden="true"
+                >
+                  <svg viewBox="0 0 16 16" focusable="false">
+                    <path d="M3.25 5.75 L8 10.5 L12.75 5.75"/>
+                  </svg>
+                </span>
+              </button>
+            </div>
+
+            <div class="hashrate-registers__body" [class.hashrate-registers__body--collapsed]="isHashrateRegistersCollapsed">
+              <div class="hashrate-registers__grid">
+                <div class="hashrate-registers__asic-column" *ngFor="let column of hashrateDomainColumns">
+                  <ng-container *ngFor="let domain of column.domains">
+                    <div class="hashrate-registers__cell"
+                         [style.background]="getHashrateDomainBg(domain, hashrateDomainsGlobalMax, barFill, hashrateRegistersCfg)">
+                      <ng-container *ngIf="domain !== null && domain !== undefined; else hashRegNA">
+                        <span class="hashrate-registers__value">{{ domain | number: '1.0-0' }}</span>
+                        <span class="hashrate-registers__unit unit">{{ 'UNITS.HASHRATE' | translate }}</span>
+                      </ng-container>
+                      <ng-template #hashRegNA>
+                        <span class="hashrate-registers__na">N/A</span>
+                      </ng-template>
+                    </div>
+                  </ng-container>
+                  <div class="hashrate-registers__asic-total">
+                    <ng-container *ngIf="column.totalGhs !== null; else hashRegTotalNA">
+                      <span class="hashrate-registers__asic-total-value">{{ column.totalGhs | number: '1.0-0' }}</span>
+                    </ng-container>
+                    <ng-template #hashRegTotalNA>
+                      <span class="hashrate-registers__asic-total-na">N/A</span>
+                    </ng-template>
+                  </div>
+                  <div class="hashrate-registers__asic">A{{ column.asicIndex + 1 }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Nerd*OS logo (dual pool) -->
+        <div class="nerdos-logo-row nerdos-logo-row--dual" *ngIf="isDualPool">
             <div class="nerdos-logo-wrap nerdos-logo-wrap--dual">
               <div class="nerdos-logo-wrap__inner" [style.--nerdos-logo-color]="nerdOsLogoColor">
                 <div

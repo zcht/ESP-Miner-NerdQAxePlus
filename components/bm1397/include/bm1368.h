@@ -17,8 +17,8 @@ protected:
 public:
     BM1368();
     virtual const char* getName() { return "BM1368"; };
+    virtual uint8_t getHashDomainCount() { return 4; }
     virtual uint8_t init(uint64_t frequency, uint16_t asic_count, uint32_t difficulty, uint32_t vrFrequency);
     virtual void requestChipTemp();
     virtual uint16_t getSmallCoreCount();
 };
-

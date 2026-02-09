@@ -64,11 +64,14 @@
     "HASHRATE_10M": " (10 min)",
     "HASHRATE_1H": " (1 hora)",
     "HASHRATE_1D": " (1 día)",
-    "CHART_SPAN": "Intervalo",
-    "FAN_CHANNEL": "Ventilador C{{channel}}",
     "SHARE_TOO_SMALL": "Porcentaje para este pool demasiado bajo!",
     "HIDE_CHART": "ocultar",
-    "SHOW_CHART": "mostrar"
+    "SHOW_CHART": "mostrar",
+    "CHART_SPAN": "Intervalo",
+    "HASHRATE_REGISTERS": "Registros de hashrate",
+    "ASIC": "ASIC",
+    "DOMAINS": "Dominios",
+    "DOMAIN": "Dominio"
   },
   "PERFORMANCE": {
     "TITLE": "Rendimiento",
@@ -461,6 +464,8 @@
   },
   "UNITS": {
     "HASHRATE": "Gh/s",
+    "HOUR_SHORT": "h",
+    "MINUTE_SHORT": "min",
     "TEMPERATURE": "°C",
     "POWER": "W",
     "VOLTAGE": "V",
@@ -476,8 +481,6 @@
     "DAY": "día",
     "HOUR": "hora",
     "MINUTE": "minuto",
-    "HOUR_SHORT": "h",
-    "MINUTE_SHORT": "min",
     "SECOND": "segundo",
     "YEAR_SINGULAR": "año",
     "YEAR_PLURAL": "años",

@@ -87,6 +87,127 @@ export function hexToRgba(input: string, alpha: number): string {
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
 }
 
+export type HashrateDomainColorCfg = {
+  /** Relative bucket width (e.g. 0.05 => 5% below max per bucket). */
+  alphaStepPct?: number;
+  /** Alpha decrease per bucket. */
+  alphaStep?: number;
+  /** Minimum alpha clamp. */
+  alphaMin?: number;
+  /** Maximum alpha clamp (top bucket / fastest domain). */
+  alphaMax?: number;
+  /** Fallback alpha for invalid/missing values. */
+  naAlpha?: number;
+};
+
+export type HashrateDomainColumn = {
+  asicIndex: number;
+  domains: Array<number | null>;
+  totalGhs: number | null;
+};
+
+export const HASHRATE_REG_MAX_ASICS = 8;
+export const HASHRATE_REG_MAX_DOMAINS = 32;
+
+export function getHashrateDomainRowMax(
+  domains: Array<number | null | undefined>,
+  maxDomains: number = Number.POSITIVE_INFINITY
+): number {
+  if (!Array.isArray(domains)) return 0;
+  let max = 0;
+  const limit = Math.max(0, Math.floor(Number(maxDomains)));
+  for (let i = 0; i < domains.length && i < limit; i++) {
+    const v = domains[i];
+    const n = Number(v);
+    if (!Number.isFinite(n)) continue;
+    if (n > max) max = n;
+  }
+  return max;
+}
+
+export function getHashrateDomainsGlobalMax(
+  matrix: Array<Array<number | null | undefined>> | null | undefined
+): number {
+  if (!Array.isArray(matrix)) return 0;
+  const rows = matrix.slice(0, HASHRATE_REG_MAX_ASICS);
+  let max = 0;
+  for (const row of rows) {
+    const rowMax = getHashrateDomainRowMax(Array.isArray(row) ? row : [], HASHRATE_REG_MAX_DOMAINS);
+    if (rowMax > max) max = rowMax;
+  }
+  return max;
+}
+
+export function toHashrateDomainColumns(
+  matrix: Array<Array<number | null | undefined>> | null | undefined,
+  domainsCount?: number | null
+): HashrateDomainColumn[] {
+  if (!Array.isArray(matrix) || matrix.length === 0) return [];
+
+  const rows = matrix.slice(0, HASHRATE_REG_MAX_ASICS);
+  const maxRowLen = rows.reduce((mx, row) => {
+    const len = Array.isArray(row) ? row.length : 0;
+    return len > mx ? len : mx;
+  }, 0);
+
+  const explicit = Number(domainsCount);
+  const widthRaw = Number.isFinite(explicit) && explicit > 0 ? Math.floor(explicit) : maxRowLen;
+  const width = Math.max(1, Math.min(HASHRATE_REG_MAX_DOMAINS, widthRaw || 1));
+
+  return rows.map((row, asicIndex) => {
+    const src = Array.isArray(row) ? row : [];
+    const domains: Array<number | null> = [];
+    let total = 0;
+    let hasFinite = false;
+    for (let i = 0; i < width; i++) {
+      const v = Number(src[i]);
+      if (Number.isFinite(v)) {
+        domains.push(v);
+        total += v;
+        hasFinite = true;
+      } else {
+        domains.push(null);
+      }
+    }
+    return { asicIndex, domains, totalGhs: hasFinite ? total : null };
+  });
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+export function getHashrateDomainAlpha(value: any, max: number, cfg?: HashrateDomainColorCfg): number {
+  const v = Number(value);
+  const m = Number(max);
+
+  const stepPct = Math.max(0.001, Number(cfg?.alphaStepPct ?? 0.05));
+  const alphaStep = Math.max(0, Number(cfg?.alphaStep ?? 0.1));
+  const alphaMin = clamp(Number(cfg?.alphaMin ?? 0.6), 0, 1);
+  const alphaMax = clamp(Number(cfg?.alphaMax ?? 1.0), alphaMin, 1);
+  const naAlpha = clamp(Number(cfg?.naAlpha ?? alphaMin), 0, 1);
+
+  if (!Number.isFinite(v) || !Number.isFinite(m) || m <= 0 || v <= 0) return naAlpha;
+
+  const ratio = clamp(v / m, 0, 1);
+  const belowPct = 1 - ratio;
+  // Every 5% below the global max reduces alpha by one bucket.
+  const bucketsBelowTop = Math.floor(belowPct / stepPct);
+  const alpha = alphaMax - (bucketsBelowTop * alphaStep);
+
+  return clamp(alpha, alphaMin, alphaMax);
+}
+
+export function getHashrateDomainBg(
+  value: any,
+  max: number,
+  baseColor: string,
+  cfg?: HashrateDomainColorCfg
+): string {
+  const alpha = getHashrateDomainAlpha(value, max, cfg);
+  return hexToRgba(baseColor, alpha);
+}
+
 /**
  * Centralized bar threshold defaults.
  *

@@ -133,10 +133,11 @@ public:
     }
     virtual void getFanSpeedCh(int channel, uint16_t *rpm) = 0;
 
-    virtual int getNumFans() { return m_numFans; }
+    virtual int getNumFans() const { return m_numFans; }
 
     virtual float getTemperature(int index) = 0;
     virtual float getVRTemp() = 0;
+    virtual float getVRTempInt() { return getVRTemp(); }
     virtual bool isPIDAvailable() = 0;
 
     virtual float getVin() = 0;
@@ -324,10 +325,6 @@ public:
 
     bool isShutdown() {
         return m_shutdown;
-    }
-
-    virtual float getVRTempInt() {
-        return 0.0f;
     }
 
 };
